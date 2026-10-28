@@ -43,6 +43,7 @@
   color-scheme: dark;
 }
 * { box-sizing: border-box; }
+[hidden] { display: none !important; }
 body {
   background: var(--bg); color: var(--ink); font-family: var(--font-body); font-size: 15px; line-height: 1.5;
   padding-left: max(16px, env(safe-area-inset-left, 0px));
@@ -161,6 +162,21 @@ dl.stats { display: grid; grid-template-columns: auto minmax(0, 1fr); gap: 4px 1
 dl.stats dt { color: var(--muted); }
 dl.stats dd { margin: 0; font-variant-numeric: tabular-nums; min-width: 0; overflow-wrap: anywhere; }
 .loading { color: var(--muted); font-size: 14px; }
+.namebar { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; font-size: 14px; }
+.namebar b { font-weight: 600; }
+.linkbtn { font: inherit; font-size: 13px; color: var(--accent); background: none; border: 0; padding: 0; cursor: pointer; text-decoration: underline; text-underline-offset: 3px; }
+.nameform { display: flex; gap: 8px; flex-wrap: wrap; }
+.nameform input { font: inherit; font-size: 15px; padding: 8px 10px; border-radius: 8px; border: 1px solid var(--line); background: var(--panel); color: var(--ink); flex: 1 1 140px; min-width: 0; }
+.card.ask { border-color: var(--accent); box-shadow: inset 0 0 0 1px var(--accent); }
+.saved { font-size: 12.5px; color: var(--muted); margin: 0; }
+.tally { font-family: var(--font-mono); font-size: 13.5px; font-variant-numeric: tabular-nums; }
+.recent { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 6px; font-size: 13.5px; max-height: 260px; overflow-y: auto; }
+.recent li { display: flex; justify-content: space-between; gap: 8px; }
+.recent .res { font-weight: 600; flex: none; }
+.recent .res.win { color: var(--good); }
+.recent .res.loss { color: var(--accent); }
+.recent .when { color: var(--muted); font-size: 12px; flex: none; }
+.recent .txt { flex: 1; min-width: 0; overflow-wrap: anywhere; }
 @media (prefers-reduced-motion: reduce) { * { transition: none !important; } }
 </style>
 
@@ -180,12 +196,22 @@ dl.stats dd { margin: 0; font-variant-numeric: tabular-nums; min-width: 0; overf
     </div>
 
     <div class="side">
+      <div class="card" id="nameCard" hidden>
+        <form class="nameform" id="nameForm" hidden>
+          <label class="label" for="nameInput" style="flex-basis:100%">What's your name?</label>
+          <input id="nameInput" maxlength="30" autocomplete="nickname" placeholder="Your name" required>
+          <button class="btn primary" type="submit">Play</button>
+          <p class="saved" style="flex-basis:100%">Robbie gets to see who won each game.</p>
+        </form>
+        <div class="namebar" id="nameBar" hidden>Playing as <b id="nameShow"></b><button class="linkbtn" id="nameChange" type="button">Change</button></div>
+      </div>
       <div class="card">
         <div class="status" id="status">Loading bot…</div>
         <p class="why" id="why">Tap a piece, then tap where it should go.</p>
         <div class="controls">
           <button class="btn primary" id="newGame">New game</button>
           <button class="btn" id="undo">Undo</button>
+          <button class="btn" id="resign">Resign</button>
           <button class="btn" id="flip">Flip board</button>
         </div>
         <div class="fields">
@@ -221,6 +247,12 @@ dl.stats dd { margin: 0; font-variant-numeric: tabular-nums; min-width: 0; overf
         <p class="legend"><span>Underlined</span> bot moves came straight from Robbie's games.</p>
       </div>
 
+      <div class="card" id="recentCard" hidden>
+        <div class="label">Friends vs Robbie's bots</div>
+        <div class="tally" id="tally"></div>
+        <ul class="recent" id="recent"></ul>
+      </div>
+
       <div class="card">
         <div class="label" id="statsLabel">This bot learned from</div>
         <dl class="stats" id="stats"><dd class="loading">Loading…</dd></dl>
@@ -231,6 +263,7 @@ dl.stats dd { margin: 0; font-variant-numeric: tabular-nums; min-width: 0; overf
 
 <script src="https://cdn.jsdelivr.net/npm/chess.js@0.10.3/chess.js"></script>
 <script src="bot.js"></script>
+<script src="config.js"></script>
 <script>
 (function () {
   'use strict';
@@ -246,7 +279,9 @@ dl.stats dd { margin: 0; font-variant-numeric: tabular-nums; min-width: 0; overf
   var chess = new Chess();
   var history = [], sources = [];
   var clock = { w: 180000, b: 180000, running: false, since: 0, flagged: null, on: true, interval: null };
-  var state = { bot: 'blitz', human: 'b', colorPref: 'b', strength: 0.5, orientation: 'b', selected: null, lastInfo: null, pending: null, busy: false, timer: null };
+  var RESULTS_URL = window.ROBBIEBOT_RESULTS_URL || '';
+  var player = { name: '' };
+  var state = { resigned: false, reported: false, takebacks: 0, bot: 'blitz', human: 'b', colorPref: 'b', strength: 0.5, orientation: 'b', selected: null, lastInfo: null, pending: null, busy: false, timer: null };
 
   function store(k, v) { try { localStorage.setItem(k, v); } catch (e) {} }
   function load(k) { try { return localStorage.getItem(k); } catch (e) { return null; } }
@@ -256,6 +291,7 @@ dl.stats dd { margin: 0; font-variant-numeric: tabular-nums; min-width: 0; overf
   var savedStrength = load('rb-strength'); if (savedStrength !== null) state.strength = parseFloat(savedStrength);
 
   var $ = function (id) { return document.getElementById(id); };
+  player.name = load('rb-name') || '';
   var boardEl = $('board');
 
   function botInfo(key) { return BOTS.filter(function (b) { return b.key === key; })[0]; }
@@ -315,7 +351,97 @@ dl.stats dd { margin: 0; font-variant-numeric: tabular-nums; min-width: 0; overf
     }
     renderClocks();
   }
-  function isOver() { return chess.game_over() || !!clock.flagged; }
+  function isOver() { return chess.game_over() || !!clock.flagged || state.resigned; }
+
+  /* The finished game from the human's side: {result: win|loss|draw, how, text}, or null. */
+  function outcome() {
+    var bn = botName(state.bot);
+    if (state.resigned) return { result: 'loss', how: 'Resigned', text: 'You resigned. ' + bn + ' wins.' };
+    if (clock.flagged) {
+      var winner = clock.flagged === 'w' ? 'b' : 'w';
+      if (onlyKing(winner)) return { result: 'draw', how: 'Timeout vs insufficient material', text: 'Draw. Time ran out, but the other side can\u2019t checkmate.' };
+      return clock.flagged === state.human
+        ? { result: 'loss', how: 'Time', text: 'You lost on time.' }
+        : { result: 'win', how: 'Time', text: bn + ' ran out of time. You win.' };
+    }
+    if (!chess.game_over()) return null;
+    if (chess.in_checkmate()) {
+      return chess.turn() === state.human
+        ? { result: 'loss', how: 'Checkmate', text: 'Checkmate. ' + bn + ' wins.' }
+        : { result: 'win', how: 'Checkmate', text: 'Checkmate. You win.' };
+    }
+    if (chess.in_stalemate()) return { result: 'draw', how: 'Stalemate', text: 'Draw by stalemate.' };
+    if (chess.in_threefold_repetition()) return { result: 'draw', how: 'Repetition', text: 'Draw by repetition.' };
+    if (chess.insufficient_material()) return { result: 'draw', how: 'Insufficient material', text: 'Draw. Not enough material to mate.' };
+    return { result: 'draw', how: '50-move rule', text: 'Draw by the 50-move rule.' };
+  }
+
+  /* ---- results: sent to Robbie's Google Sheet when the site is set up for it ---- */
+  function needsName() { return !!RESULTS_URL && !player.name; }
+
+  function renderName() {
+    if (!RESULTS_URL) return;
+    $('nameCard').hidden = false;
+    $('nameCard').classList.toggle('ask', !player.name);
+    $('nameForm').hidden = !!player.name;
+    $('nameBar').hidden = !player.name;
+    $('nameShow').textContent = player.name;
+  }
+
+  function reportGame(o) {
+    if (!RESULTS_URL || state.reported || !player.name) return;
+    state.reported = true;
+    var pgnChess = new Chess();
+    var names = { w: state.human === 'w' ? player.name : botName(state.bot), b: state.human === 'b' ? player.name : botName(state.bot) };
+    pgnChess.header('Event', 'RobbieBot', 'Date', new Date().toISOString().slice(0, 10).replace(/-/g, '.'),
+      'White', names.w, 'Black', names.b,
+      'Result', o.result === 'draw' ? '1/2-1/2' : ((o.result === 'win') === (state.human === 'w') ? '1-0' : '0-1'),
+      'TimeControl', clock.on ? String(botInfo(state.bot).seconds) : '-', 'Termination', o.how);
+    history.forEach(function (m) { pgnChess.move({ from: m.from, to: m.to, promotion: m.promotion }); });
+    var body = {
+      player: player.name, bot: botName(state.bot), color: state.human === 'w' ? 'White' : 'Black',
+      result: o.result, how: o.how, moves: Math.ceil(history.length / 2), takebacks: state.takebacks,
+      strength: $('strengthSel').selectedOptions[0].textContent, clock: clock.on ? botInfo(state.bot).label : 'Off',
+      pgn: pgnChess.pgn()
+    };
+    // text/plain keeps this a "simple" request, which Google Apps Script accepts cross-site.
+    fetch(RESULTS_URL, { method: 'POST', mode: 'no-cors', headers: { 'Content-Type': 'text/plain' }, body: JSON.stringify(body) })
+      .then(function () { setTimeout(loadRecent, 2500); })
+      .catch(function () {});
+  }
+
+  function timeAgo(iso) {
+    var s = (Date.now() - new Date(iso).getTime()) / 1000;
+    if (!(s >= 0)) return '';
+    if (s < 3600) return Math.max(1, Math.round(s / 60)) + 'm ago';
+    if (s < 86400) return Math.round(s / 3600) + 'h ago';
+    return Math.round(s / 86400) + 'd ago';
+  }
+
+  function loadRecent() {
+    if (!RESULTS_URL) return;
+    fetch(RESULTS_URL).then(function (r) { return r.json(); }).then(function (data) {
+      var games = (data && data.games) || [];
+      $('recentCard').hidden = false;
+      $('tally').textContent = data.total ? 'Friends ' + data.totals.win + ' W \u00b7 ' + data.totals.draw + ' D \u00b7 ' + data.totals.loss + ' L vs the bots (' + data.total + (data.total === 1 ? ' game)' : ' games)') : 'No games yet. Be the first.';
+      var ul = $('recent');
+      ul.innerHTML = '';
+      games.slice(0, 25).forEach(function (g) {
+        var li = document.createElement('li');
+        var res = document.createElement('span');
+        res.className = 'res ' + g.result;
+        res.textContent = { win: 'Won', loss: 'Lost', draw: 'Draw' }[g.result] || g.result;
+        var txt = document.createElement('span');
+        txt.className = 'txt';
+        txt.textContent = g.player + (g.result === 'win' ? ' beat ' : g.result === 'loss' ? ' lost to ' : ' drew ') + g.bot + (g.how ? ' (' + g.how.toLowerCase() + ')' : '');
+        var when = document.createElement('span');
+        when.className = 'when';
+        when.textContent = timeAgo(g.date);
+        li.appendChild(res); li.appendChild(txt); li.appendChild(when);
+        ul.appendChild(li);
+      });
+    }).catch(function () {});
+  }
   /* How long the bot "thinks", scaled to its time control and clock. */
   function thinkTime(source) {
     var base = { bullet: 700, blitz: 2000, rapid: 6000 }[state.bot];
@@ -451,7 +577,7 @@ dl.stats dd { margin: 0; font-variant-numeric: tabular-nums; min-width: 0; overf
 
   function onSquare(e) {
     var name = e.currentTarget.dataset.sq;
-    if (state.busy || isOver() || chess.turn() !== state.human || !profiles[state.bot]) return;
+    if (state.busy || isOver() || needsName() || chess.turn() !== state.human || !profiles[state.bot]) return;
     var p = chess.get(name);
     if (state.selected) {
       var move = chess.moves({ square: state.selected, verbose: true }).filter(function (m) { return m.to === name; })[0];
@@ -477,7 +603,7 @@ dl.stats dd { margin: 0; font-variant-numeric: tabular-nums; min-width: 0; overf
   }
 
   function scheduleBot() {
-    if (isOver() || chess.turn() === state.human) return;
+    if (isOver() || chess.turn() === state.human || needsName()) return;
     var p = profiles[state.bot];
     if (!p) { fetchProfile(state.bot).then(scheduleBot); return; }
     state.busy = true;
@@ -513,19 +639,14 @@ dl.stats dd { margin: 0; font-variant-numeric: tabular-nums; min-width: 0; overf
     var s = $('status'), why = $('why');
     s.classList.remove('over');
     if (!profiles[state.bot]) { s.textContent = 'Loading ' + botName(state.bot) + '…'; return; }
-    if (clock.flagged) {
-      s.classList.add('over');
-      var winner = clock.flagged === 'w' ? 'b' : 'w';
-      if (onlyKing(winner)) s.textContent = 'Draw. Time ran out, but the other side can\u2019t checkmate.';
-      else s.textContent = clock.flagged === state.human ? 'You lost on time.' : botName(state.bot) + ' ran out of time. You win.';
-    } else if (chess.game_over()) {
+    var o = outcome();
+    if (o) {
       stopClock();
       s.classList.add('over');
-      if (chess.in_checkmate()) s.textContent = 'Checkmate. ' + (chess.turn() === state.human ? botName(state.bot) + ' wins.' : 'You win.');
-      else if (chess.in_stalemate()) s.textContent = 'Draw by stalemate.';
-      else if (chess.in_threefold_repetition()) s.textContent = 'Draw by repetition.';
-      else if (chess.insufficient_material()) s.textContent = 'Draw. Not enough material to mate.';
-      else s.textContent = 'Draw by the 50-move rule.';
+      s.textContent = o.text;
+      reportGame(o);
+    } else if (needsName()) {
+      s.textContent = 'Enter your name to start.';
     } else if (chess.turn() === state.human) {
       s.textContent = 'Your move' + (chess.in_check() ? ', you are in check.' : '.');
     } else {
@@ -553,7 +674,7 @@ dl.stats dd { margin: 0; font-variant-numeric: tabular-nums; min-width: 0; overf
     $('bottomChip').className = 'chip ' + (top === 'w' ? 'b' : 'w');
   }
 
-  function renderAll() { renderBoard(); renderMoves(); renderStatus(); renderPlayers(); renderStats(); renderClocks(); }
+  function renderAll() { renderName(); renderBoard(); renderMoves(); renderStatus(); renderPlayers(); renderStats(); renderClocks(); }
 
   function newGame() {
     clearTimeout(state.timer);
@@ -562,6 +683,7 @@ dl.stats dd { margin: 0; font-variant-numeric: tabular-nums; min-width: 0; overf
     state.human = state.colorPref === 'r' ? (Math.random() < 0.5 ? 'w' : 'b') : state.colorPref;
     state.orientation = state.human;
     state.selected = null; state.pending = null; state.lastInfo = null;
+    state.resigned = false; state.reported = false; state.takebacks = 0;
     resetClock();
     renderAll();
     scheduleBot();
@@ -578,8 +700,30 @@ dl.stats dd { margin: 0; font-variant-numeric: tabular-nums; min-width: 0; overf
   }
 
   $('newGame').addEventListener('click', newGame);
+  $('resign').addEventListener('click', function () {
+    if (isOver() || !history.length) return;
+    clearTimeout(state.timer); state.busy = false; $('thinking').hidden = true;
+    stopClock();
+    state.resigned = true;
+    renderAll();
+  });
+  $('nameForm').addEventListener('submit', function (e) {
+    e.preventDefault();
+    var n = $('nameInput').value.replace(/\s+/g, ' ').trim().slice(0, 30);
+    if (!n) return;
+    player.name = n; store('rb-name', n);
+    renderAll();
+    scheduleBot();
+  });
+  $('nameChange').addEventListener('click', function () {
+    $('nameInput').value = player.name;
+    player.name = '';
+    renderAll();
+    $('nameInput').focus();
+  });
   $('undo').addEventListener('click', function () {
-    if (!history.length || clock.flagged) return;
+    if (!history.length || clock.flagged || state.resigned || state.reported) return;
+    state.takebacks++;
     clearTimeout(state.timer); state.busy = false; $('thinking').hidden = true;
     stopClock();
     do { chess.undo(); history.pop(); sources.pop(); }
@@ -624,6 +768,7 @@ dl.stats dd { margin: 0; font-variant-numeric: tabular-nums; min-width: 0; overf
     BOTS.forEach(function (b) { if (b.key !== state.bot) fetchProfile(b.key).then(function () { renderBots(); }).catch(function () {}); });
   }
   clock.interval = setInterval(tick, 100);
+  loadRecent();
   if (hot && hot.snapshot) {
     hot.snapshot(function () {
       return { bot: state.bot, human: state.human, orientation: state.orientation, sources: sources,

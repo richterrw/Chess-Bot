@@ -33,6 +33,14 @@ Then open http://localhost:8000. `web/bot.js` is a line-for-line port of the
 Python bot; `python -m tests.test_web_parity data/games.pgn` checks that both
 compute identical features and search scores.
 
+## Public website and friends' results
+
+`.github/workflows/pages.yml` publishes `web/` to GitHub Pages on every push
+(turn it on under Settings → Pages → Source: GitHub Actions). Players enter
+their name, and each finished game (win, loss, draw, resignation or timeout,
+with the full PGN) is saved to a Google Sheet. Setup steps are in
+[results/README.md](results/README.md).
+
 ## Usage
 
 ```bash
