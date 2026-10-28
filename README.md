@@ -1,0 +1,61 @@
+# Chess Bot: plays like robbierichter
+
+A chess bot trained on every game from a chess.com account. It plays the
+moves you actually played, and when it reaches a position you've never seen,
+it picks the move you'd most likely choose.
+
+## How it imitates you
+
+1. **Your personal book.** Every position you reached in your first 20 moves,
+   plus every later position you reached at least twice, is stored with
+   the moves you chose there and how often. In those positions the bot picks
+   one of your moves, weighted by how often you played it. So it opens like
+   you, answers 1.e4 like you, and repeats your habits.
+2. **A model of how you choose moves.** Out of book, a softmax model trained on
+   your games scores each legal move. Its features include which piece moves,
+   captures, checks, castling timing, pawn storms, early queen moves, hanging
+   pieces, threats, favourite squares, and so on, each split by game phase.
+   The model learns how much *you* care about each one.
+3. **Optional blunder check.** `strength` mixes in a small tactical search.
+   At `0` the bot is pure imitation. Higher values make it blunder less than
+   the raw model. It never misses a mate-in-one when `strength > 0`.
+
+## Usage
+
+```bash
+python -m venv .venv && source .venv/bin/activate
+pip install -r requirements.txt
+
+# 1. Download all your games from chess.com (public API, no login needed)
+python -m chessbot.fetch --user robbierichter          # -> data/games.pgn
+
+# 2. Learn your style (a couple of minutes for thousands of games)
+python -m chessbot.train --user robbierichter          # -> data/profile.json
+#    only learn from one time control, e.g. your blitz games:
+python -m chessbot.train --time-classes blitz
+
+# 3. Play against yourself in the terminal
+python -m chessbot.play --color white
+```
+
+Training prints a summary of your play: openings, replies to 1.e4/1.d4,
+castling habits, capture/check rate, ratings, and how often the model
+predicts your exact move.
+
+### Knobs
+
+| Option          | Meaning                                                            |
+|-----------------|--------------------------------------------------------------------|
+| `--temperature` | `0` = always your most likely move, `1` = sample like you (default) |
+| `--strength`    | `0` = pure imitation, `0.5` default, `2+` = noticeably stronger     |
+
+### Use it in a chess GUI or on lichess
+
+`python -m chessbot.uci --profile data/profile.json` speaks the UCI protocol,
+so you can load it as an engine in Arena, Cute Chess, BanksiaGUI, and so on,
+or run it as a lichess bot account with
+[lichess-bot](https://github.com/lichess-bot-devs/lichess-bot). UCI options:
+`Temperature`, `Strength`, `OwnBook`.
+
+(chess.com doesn't let third-party bots play on the site, so lichess or a
+local GUI is the way to play against it online.)
