@@ -3,7 +3,7 @@ import argparse
 import json
 import os
 
-STAT_KEYS = ["games", "as_white", "as_black", "score", "ratings", "favourite_first_moves",
+STAT_KEYS = ["peak_min_rating", "games", "as_white", "as_black", "score", "ratings", "favourite_first_moves",
              "top_openings_white", "top_openings_black", "castling_rate", "capture_rate",
              "check_rate", "average_game_length_moves", "model_top1_accuracy"]
 
@@ -33,10 +33,10 @@ def main():
     ap.add_argument("--min-count", type=int, default=1)
     args = ap.parse_args()
     os.makedirs(args.out, exist_ok=True)
-    for tc in ("bullet", "blitz", "rapid"):
-        path = os.path.join(args.data, f"profile_{tc}.json")
+    for name in ("bullet", "blitz", "rapid", "peak"):
+        path = os.path.join(args.data, f"profile_{name}.json")
         if os.path.exists(path):
-            export(path, os.path.join(args.out, f"{tc}.json"), tc.capitalize(), args.min_count)
+            export(path, os.path.join(args.out, f"{name}.json"), name.capitalize(), args.min_count)
 
 
 if __name__ == "__main__":

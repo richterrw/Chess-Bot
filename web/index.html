@@ -58,7 +58,9 @@ h1 {
 h1 span { color: var(--accent); }
 .tagline { color: var(--muted); margin: 0; max-width: 46ch; }
 
-.bots { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 10px; }
+.bots { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 10px; }
+@media (max-width: 900px) { .bots { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+.bot.peak .tc { color: var(--accent); }
 .bot {
   font: inherit; color: inherit; text-align: left; cursor: pointer;
   background: var(--panel); border: 1.5px solid var(--line); border-radius: 10px;
@@ -165,7 +167,7 @@ dl.stats dd { margin: 0; font-variant-numeric: tabular-nums; min-width: 0; overf
 <div class="wrap">
   <header>
     <h1>Robbie<span>Bot</span></h1>
-    <p class="tagline">Three bots trained on 11,985 of robbierichter's chess.com games, one per time control. They play the moves Robbie played, and guess like Robbie when the position is new.</p>
+    <p class="tagline">Bots trained on 11,985 of robbierichter's chess.com games: one per time control, plus Peak Robbie, who learned only from games played at Robbie's highest ratings. They play the moves Robbie played, and guess like Robbie when the position is new.</p>
   </header>
 
   <div class="bots" id="bots" role="group" aria-label="Choose a bot"></div>
@@ -235,7 +237,8 @@ dl.stats dd { margin: 0; font-variant-numeric: tabular-nums; min-width: 0; overf
   var BOTS = [
     { key: 'bullet', name: 'Bullet', seconds: 60, label: '1 min' },
     { key: 'blitz', name: 'Blitz', seconds: 180, label: '3 min' },
-    { key: 'rapid', name: 'Rapid', seconds: 600, label: '10 min' }
+    { key: 'rapid', name: 'Rapid', seconds: 600, label: '10 min' },
+    { key: 'peak', name: 'Peak', seconds: 180, label: '3 min' }
   ];
   var GLYPH = { k: '♚', q: '♛', r: '♜', b: '♝', n: '♞', p: '♟' };
   var VS = '︎';
@@ -339,11 +342,13 @@ dl.stats dd { margin: 0; font-variant-numeric: tabular-nums; min-width: 0; overf
     el.innerHTML = '';
     BOTS.forEach(function (b) {
       var p = profiles[b.key], btn = document.createElement('button');
-      btn.className = 'bot';
+      btn.className = 'bot' + (b.key === 'peak' ? ' peak' : '');
       btn.setAttribute('aria-pressed', String(state.bot === b.key));
-      var r = p && p.stats.ratings[b.key];
+      var r = p && p.stats.ratings[b.key], ratingText = '&nbsp;';
+      if (r) ratingText = 'avg ' + r.average + ' · peak ' + r.peak;
+      else if (p && b.key === 'peak') ratingText = 'blitz ' + p.stats.ratings.blitz.average + ' · rapid ' + p.stats.ratings.rapid.average;
       btn.innerHTML = '<span class="tc">' + b.name + ' Robbie <span class="meta">' + b.label + '</span></span>' +
-        '<span class="rating">' + (r ? 'avg ' + r.average + ' · peak ' + r.peak : '&nbsp;') + '</span>' +
+        '<span class="rating">' + ratingText + '</span>' +
         '<span class="meta">' + (p ? p.stats.games.toLocaleString() + ' games' : 'loading…') + '</span>';
       btn.addEventListener('click', function () { selectBot(b.key); });
       el.appendChild(btn);
@@ -360,6 +365,7 @@ dl.stats dd { margin: 0; font-variant-numeric: tabular-nums; min-width: 0; overf
     var whiteTotal = firsts.reduce(function (t, x) { return t + x[1]; }, 0);
     var rows = [
       ['Games', s.games.toLocaleString() + ' (' + s.as_white.toLocaleString() + ' as White)'],
+      s.peak_min_rating ? ['Only games at', 'blitz ' + s.peak_min_rating.blitz + '+, bullet ' + s.peak_min_rating.bullet + '+, rapid ' + s.peak_min_rating.rapid + '+'] : null,
       ['Record', sc.wins.toLocaleString() + ' W · ' + sc.draws + ' D · ' + sc.losses.toLocaleString() + ' L'],
       ['First move', firsts.length ? '1.' + firsts[0][0] + ' in ' + Math.round(100 * firsts[0][1] / whiteTotal) + '% of White games' : '–'],
       ['As White', opening(s.top_openings_white)],
@@ -367,7 +373,7 @@ dl.stats dd { margin: 0; font-variant-numeric: tabular-nums; min-width: 0; overf
       ['Castles', Math.round(s.castling_rate * 100) + '% of games'],
       ['Guesses Robbie', Math.round(s.model_top1_accuracy * 100) + '% of new positions exactly']
     ];
-    el.innerHTML = rows.map(function (r) { return '<dt>' + r[0] + '</dt><dd>' + escapeHtml(String(r[1])) + '</dd>'; }).join('');
+    el.innerHTML = rows.filter(Boolean).map(function (r) { return '<dt>' + r[0] + '</dt><dd>' + escapeHtml(String(r[1])) + '</dd>'; }).join('');
   }
 
   function escapeHtml(t) { return t.replace(/[&<>"]/g, function (c) { return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]; }); }

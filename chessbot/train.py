@@ -30,11 +30,34 @@ def position_key(board):
     return " ".join(board.fen().split(" ")[:4])
 
 
-def iter_games(pgn_path, user, time_classes=None, rated_only=False):
+def user_rating(headers, color):
+    elo = headers.get("WhiteElo" if color == chess.WHITE else "BlackElo", "")
+    return int(elo) if elo.isdigit() else None
+
+
+def peak_thresholds(pgn_path, user, top_percent):
+    """Rating needed to be in your top `top_percent`% of games, per time class."""
+    ratings = collections.defaultdict(list)
+    for game, color, tc in iter_games(pgn_path, user, headers_only=True):
+        r = user_rating(game.headers, color)
+        if r is not None:
+            ratings[tc].append(r)
+    out = {}
+    for tc, rs in ratings.items():
+        rs.sort()
+        out[tc] = rs[min(len(rs) - 1, int(len(rs) * (1 - top_percent / 100)))]
+    return out
+
+
+def iter_games(pgn_path, user, time_classes=None, min_rating=None, headers_only=False):
     user = user.lower()
     with open(pgn_path, encoding="utf-8", errors="replace") as fh:
         while True:
-            game = chess.pgn.read_game(fh)
+            if headers_only:
+                headers = chess.pgn.read_headers(fh)
+                game = chess.pgn.Game(headers) if headers is not None else None
+            else:
+                game = chess.pgn.read_game(fh)
             if game is None:
                 return
             h = game.headers
@@ -49,6 +72,10 @@ def iter_games(pgn_path, user, time_classes=None, rated_only=False):
             tc = time_class(h.get("TimeControl", ""))
             if time_classes and tc not in time_classes:
                 continue
+            if min_rating is not None:
+                r = user_rating(h, color)
+                if tc not in min_rating or r is None or r < min_rating[tc]:
+                    continue
             yield game, color, tc
 
 
@@ -68,7 +95,8 @@ def time_class(tc):
     return "rapid"
 
 
-def train(pgn_path, user, out_path, max_positions=60000, epochs=3, time_classes=None, seed=0):
+def train(pgn_path, user, out_path, max_positions=60000, epochs=3, time_classes=None, seed=0,
+          top_percent=None):
     rng = random.Random(seed)
     book = collections.defaultdict(collections.Counter)
     samples = []  # (features of each legal move, index of the move played)
@@ -80,8 +108,12 @@ def train(pgn_path, user, out_path, max_positions=60000, epochs=3, time_classes=
     castle_moves = []
     seen_positions = 0
     t0 = time.time()
+    min_rating = None
+    if top_percent:
+        min_rating = peak_thresholds(pgn_path, user, top_percent)
+        print(f"Peak games only: rating at least {min_rating}", file=sys.stderr)
 
-    for n, (game, color, tc) in enumerate(iter_games(pgn_path, user, time_classes), 1):
+    for n, (game, color, tc) in enumerate(iter_games(pgn_path, user, time_classes, min_rating), 1):
         h = game.headers
         side = "white" if color == chess.WHITE else "black"
         stats["games"] += 1
@@ -164,8 +196,10 @@ def train(pgn_path, user, out_path, max_positions=60000, epochs=3, time_classes=
         "as_white": stats["games_white"], "as_black": stats["games_black"],
         "score": {"wins": stats["wins"], "draws": stats["draws"], "losses": stats["losses"]},
         "time_classes": {k[3:]: v for k, v in stats.items() if k.startswith("tc_")},
-        "ratings": {tc: {"peak": max(r), "latest": r[-1], "average": round(sum(r) / len(r))}
+        "ratings": {tc: {"peak": max(r), "latest": r[-1], "average": round(sum(r) / len(r)),
+                         "lowest": min(r)}
                     for tc, r in ratings.items() if r},
+        "peak_min_rating": min_rating,
         "favourite_first_moves": first_moves.most_common(5),
         "replies_as_black": {m: c.most_common(3) for m, c in replies.items()
                              if sum(c.values()) >= 5},
@@ -254,11 +288,15 @@ def main():
     ap.add_argument("--max-positions", type=int, default=60000,
                     help="positions sampled to train the move model (more = slower, better)")
     ap.add_argument("--epochs", type=int, default=3)
+    ap.add_argument("--top-percent", type=float,
+                    help="only learn from games played while your rating was in your top N%% "
+                         "for that time control (e.g. 20 for a 'peak' bot)")
     ap.add_argument("--time-classes", nargs="*", choices=["bullet", "blitz", "rapid", "daily"],
                     help="only learn from these time controls (default: all)")
     args = ap.parse_args()
     profile = train(args.pgn, args.user, args.out, args.max_positions, args.epochs,
-                    set(args.time_classes) if args.time_classes else None)
+                    set(args.time_classes) if args.time_classes else None,
+                    top_percent=args.top_percent)
     s = dict(profile["stats"])
     s.pop("style_weights")
     print(json.dumps(s, indent=2))

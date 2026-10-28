@@ -51,6 +51,8 @@ python -m chessbot.train --time-classes blitz
 for tc in bullet blitz rapid; do
   python -m chessbot.train --time-classes $tc --out data/profile_$tc.json
 done
+#    and a "peak" bot that only learns from games played at your highest ratings:
+python -m chessbot.train --top-percent 20 --time-classes bullet blitz rapid --out data/profile_peak.json
 python -m chessbot.export_web
 
 # 3. Play against yourself in the terminal (add --profile data/profile_blitz.json etc.)
