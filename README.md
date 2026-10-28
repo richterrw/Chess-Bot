@@ -20,6 +20,19 @@ it picks the move you'd most likely choose.
    At `0` the bot is pure imitation. Higher values make it blunder less than
    the raw model. It never misses a mate-in-one when `strength > 0`.
 
+## Play in your browser
+
+`web/` is a version that runs entirely in the browser, with three bots trained
+separately on Robbie's bullet, blitz and rapid games. To run it locally:
+
+```bash
+cd web && python -m http.server 8000
+```
+
+Then open http://localhost:8000. `web/bot.js` is a line-for-line port of the
+Python bot; `python -m tests.test_web_parity data/games.pgn` checks that both
+compute identical features and search scores.
+
 ## Usage
 
 ```bash
@@ -34,7 +47,13 @@ python -m chessbot.train --user robbierichter          # -> data/profile.json
 #    only learn from one time control, e.g. your blitz games:
 python -m chessbot.train --time-classes blitz
 
-# 3. Play against yourself in the terminal
+#    or train one bot per time control and export them for the browser:
+for tc in bullet blitz rapid; do
+  python -m chessbot.train --time-classes $tc --out data/profile_$tc.json
+done
+python -m chessbot.export_web
+
+# 3. Play against yourself in the terminal (add --profile data/profile_blitz.json etc.)
 python -m chessbot.play --color white
 ```
 

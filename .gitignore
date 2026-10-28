@@ -4,3 +4,5 @@ __pycache__/
 data/*
 !data/profile.json
 !data/summary.json
+!data/profile_*.json
+!data/summary_*.json

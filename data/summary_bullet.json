@@ -1,0 +1,282 @@
+{
+  "user": "robbierichter",
+  "games": 2877,
+  "as_white": 1427,
+  "as_black": 1450,
+  "score": {
+    "wins": 1432,
+    "draws": 50,
+    "losses": 1395
+  },
+  "time_classes": {
+    "bullet": 2877
+  },
+  "ratings": {
+    "bullet": {
+      "peak": 1276,
+      "latest": 731,
+      "average": 962
+    }
+  },
+  "favourite_first_moves": [
+    [
+      "d4",
+      1323
+    ],
+    [
+      "e4",
+      74
+    ],
+    [
+      "d3",
+      20
+    ],
+    [
+      "f4",
+      6
+    ],
+    [
+      "c4",
+      1
+    ]
+  ],
+  "replies_as_black": {
+    "e2e4": [
+      [
+        "c5",
+        727
+      ],
+      [
+        "e5",
+        63
+      ],
+      [
+        "d5",
+        33
+      ]
+    ],
+    "d2d4": [
+      [
+        "e6",
+        101
+      ],
+      [
+        "d5",
+        94
+      ],
+      [
+        "c5",
+        62
+      ]
+    ],
+    "e2e3": [
+      [
+        "c5",
+        61
+      ],
+      [
+        "e5",
+        4
+      ],
+      [
+        "e6",
+        2
+      ]
+    ],
+    "c2c3": [
+      [
+        "c5",
+        7
+      ],
+      [
+        "d5",
+        1
+      ]
+    ],
+    "d2d3": [
+      [
+        "c5",
+        31
+      ],
+      [
+        "d5",
+        1
+      ],
+      [
+        "f5",
+        1
+      ]
+    ],
+    "f2f4": [
+      [
+        "c5",
+        9
+      ],
+      [
+        "d5",
+        3
+      ]
+    ],
+    "g1f3": [
+      [
+        "c5",
+        33
+      ],
+      [
+        "d5",
+        5
+      ],
+      [
+        "e6",
+        2
+      ]
+    ],
+    "g2g3": [
+      [
+        "c5",
+        40
+      ],
+      [
+        "d5",
+        3
+      ],
+      [
+        "e5",
+        3
+      ]
+    ],
+    "b1c3": [
+      [
+        "c5",
+        8
+      ],
+      [
+        "e6",
+        1
+      ]
+    ],
+    "b2b3": [
+      [
+        "c5",
+        17
+      ],
+      [
+        "d5",
+        1
+      ]
+    ],
+    "f2f3": [
+      [
+        "c5",
+        7
+      ]
+    ],
+    "c2c4": [
+      [
+        "c5",
+        13
+      ],
+      [
+        "e6",
+        1
+      ],
+      [
+        "d5",
+        1
+      ]
+    ]
+  },
+  "top_openings_white": [
+    [
+      "Queens Pawn Opening Accelerated London System",
+      150
+    ],
+    [
+      "Queens Pawn Opening Zukertort Chigorin Variation 3.Bf4 Nf6 4",
+      90
+    ],
+    [
+      "Englund Gambit 2.dxe5",
+      89
+    ],
+    [
+      "Queens Pawn Opening Accelerated London System 2...e6 3.e3",
+      63
+    ],
+    [
+      "Queens Pawn Opening Horwitz Defense 2.Bf4",
+      61
+    ],
+    [
+      "English Defense",
+      48
+    ],
+    [
+      "Queens Pawn Opening 1...d6 2.Bf4",
+      47
+    ],
+    [
+      "Queens Pawn Opening Accelerated London System 2...e6 3.e3 Bd",
+      46
+    ],
+    [
+      "Englund Gambit",
+      43
+    ],
+    [
+      "Englund Gambit 2.dxe5 Nc6 3.Nf3 Qe7",
+      42
+    ]
+  ],
+  "top_openings_black": [
+    [
+      "Sicilian Defense French Variation",
+      93
+    ],
+    [
+      "Sicilian Defense Bowdler Attack 2...e6",
+      92
+    ],
+    [
+      "Sicilian Defense",
+      70
+    ],
+    [
+      "Sicilian Defense French Variation 3.Nc3 d5",
+      55
+    ],
+    [
+      "Van t Kruijs Opening 1...c5",
+      49
+    ],
+    [
+      "Sicilian Defense French Variation 3.Nc3 d5 4.exd5 exd5",
+      46
+    ],
+    [
+      "French Defense Franco Sicilian Defense",
+      37
+    ],
+    [
+      "Queens Pawn Opening Krause Variation 3.dxc5 e6 4.e4 Bxc5",
+      35
+    ],
+    [
+      "Sicilian Defense Marshall Counterattack 4.exd5 exd5",
+      32
+    ],
+    [
+      "Sicilian Defense French Variation 3.d3 d5",
+      28
+    ]
+  ],
+  "castling_rate": 0.76,
+  "kingside_castle_share": 0.792,
+  "average_castle_move": 11.1,
+  "capture_rate": 0.279,
+  "check_rate": 0.085,
+  "early_queen_moves_per_game": 0.27,
+  "average_game_length_moves": 28.2,
+  "model_top1_accuracy": 0.375,
+  "book_positions": 42817
+}

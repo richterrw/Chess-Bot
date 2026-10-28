@@ -1,0 +1,216 @@
+{
+  "user": "robbierichter",
+  "games": 744,
+  "as_white": 357,
+  "as_black": 387,
+  "score": {
+    "wins": 408,
+    "draws": 25,
+    "losses": 311
+  },
+  "time_classes": {
+    "rapid": 744
+  },
+  "ratings": {
+    "rapid": {
+      "peak": 1572,
+      "latest": 1364,
+      "average": 1286
+    }
+  },
+  "favourite_first_moves": [
+    [
+      "d4",
+      312
+    ],
+    [
+      "e4",
+      40
+    ],
+    [
+      "d3",
+      3
+    ],
+    [
+      "f4",
+      1
+    ],
+    [
+      "e3",
+      1
+    ]
+  ],
+  "replies_as_black": {
+    "e2e4": [
+      [
+        "c5",
+        232
+      ],
+      [
+        "d5",
+        9
+      ],
+      [
+        "e5",
+        8
+      ]
+    ],
+    "g2g4": [
+      [
+        "d5",
+        3
+      ],
+      [
+        "c5",
+        2
+      ]
+    ],
+    "d2d4": [
+      [
+        "d5",
+        35
+      ],
+      [
+        "e6",
+        13
+      ],
+      [
+        "e5",
+        5
+      ]
+    ],
+    "g1f3": [
+      [
+        "c5",
+        8
+      ]
+    ],
+    "c2c3": [
+      [
+        "c5",
+        6
+      ]
+    ],
+    "e2e3": [
+      [
+        "c5",
+        15
+      ],
+      [
+        "d5",
+        2
+      ],
+      [
+        "e6",
+        2
+      ]
+    ],
+    "c2c4": [
+      [
+        "c5",
+        5
+      ],
+      [
+        "a6",
+        1
+      ],
+      [
+        "e5",
+        1
+      ]
+    ]
+  },
+  "top_openings_white": [
+    [
+      "Queens Pawn Opening Accelerated London System",
+      57
+    ],
+    [
+      "Queens Pawn Opening Horwitz Defense 2.Bf4",
+      18
+    ],
+    [
+      "Queens Pawn Opening Accelerated London System 2...e6 3.e3",
+      16
+    ],
+    [
+      "Queens Pawn Opening 1...d6 2.Bf4",
+      10
+    ],
+    [
+      "Englund Gambit 2.dxe5 Nc6 3.Nf3 Qe7",
+      10
+    ],
+    [
+      "Queens Pawn Opening Accelerated London System 2...e6 3.e3 Bd",
+      9
+    ],
+    [
+      "Englund Gambit 2.dxe5",
+      9
+    ],
+    [
+      "Indian Game 2.Bf4",
+      8
+    ],
+    [
+      "Queens Pawn Opening Accelerated London System 2...Bf5 3.e3 e",
+      8
+    ],
+    [
+      "Queens Pawn Opening Accelerated London System 2...Nf6 3.e3",
+      7
+    ]
+  ],
+  "top_openings_black": [
+    [
+      "Sicilian Defense Bowdler Attack 2...e6",
+      41
+    ],
+    [
+      "Sicilian Defense",
+      22
+    ],
+    [
+      "Sicilian Defense French Variation",
+      17
+    ],
+    [
+      "French Defense Franco Sicilian Defense",
+      12
+    ],
+    [
+      "Van t Kruijs Opening 1...c5",
+      11
+    ],
+    [
+      "Sicilian Defense French Variation 3.Nc3 d5 4.exd5 exd5",
+      10
+    ],
+    [
+      "Old Benoni Defense Franco Benoni Defense",
+      7
+    ],
+    [
+      "Sicilian Defense Bowdler Attack 2...e6 3.Nc3",
+      7
+    ],
+    [
+      "Saragossa Opening",
+      6
+    ],
+    [
+      "Sicilian Defense French Variation 3.Nc3 d5",
+      6
+    ]
+  ],
+  "castling_rate": 0.673,
+  "kingside_castle_share": 0.842,
+  "average_castle_move": 11.6,
+  "capture_rate": 0.249,
+  "check_rate": 0.104,
+  "early_queen_moves_per_game": 0.25,
+  "average_game_length_moves": 31.5,
+  "model_top1_accuracy": 0.373,
+  "book_positions": 11521
+}
