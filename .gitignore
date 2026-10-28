@@ -1,4 +1,6 @@
 __pycache__/
 *.pyc
 .venv/
-data/
+data/*
+!data/profile.json
+!data/summary.json
