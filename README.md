@@ -78,6 +78,23 @@ predicts your exact move.
 | `--temperature` | `0` = always your most likely move, `1` = sample like you (default) |
 | `--strength`    | `0` = pure imitation, `0.5` default, `2+` = noticeably stronger     |
 
+### Strength levels in the browser
+
+The browser bots add a real search on top of the style model: they look
+2-4 half-moves ahead (plus captures), keep only moves within a margin of the
+best, and pick among those the one Robbie would most likely play. They also
+skip remembered moves that search says lose material.
+
+| Level   | Search            | Blunders* | Notes                                   |
+|---------|-------------------|-----------|-----------------------------------------|
+| Rushed  | 1-ply check only  | 13.5%     | matches Robbie's real blitz blunder rate (14.6%) |
+| Focused | 2 plies, 150cp    | 6.9%      |                                         |
+| Sharp   | 3 plies, 100cp    | 1.5%      | default; beat Rushed 9-1                |
+| Max     | 4 plies, 50cp     | ~0%       |                                         |
+
+\* Share of moves losing 2+ pawns in 274 positions from Robbie's blitz games,
+judged by a 4-ply search (so Max is graded by its own yardstick).
+
 ### Use it in a chess GUI or on lichess
 
 `python -m chessbot.uci --profile data/profile.json` speaks the UCI protocol,

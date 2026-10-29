@@ -233,9 +233,10 @@ dl.stats dd { margin: 0; font-variant-numeric: tabular-nums; min-width: 0; overf
           <div class="field">
             <label for="strengthSel">Bot strength</label>
             <select id="strengthSel">
-              <option value="0.5">Like Robbie</option>
-              <option value="0">Pure imitation</option>
-              <option value="2">Tougher</option>
+              <option value="rushed">Rushed (blunders like blitz Robbie)</option>
+              <option value="focused">Focused</option>
+              <option value="sharp">Sharp</option>
+              <option value="max">Max</option>
             </select>
           </div>
         </div>
@@ -281,14 +282,23 @@ dl.stats dd { margin: 0; font-variant-numeric: tabular-nums; min-width: 0; overf
   var clock = { w: 180000, b: 180000, running: false, since: 0, flagged: null, on: true, interval: null };
   var RESULTS_URL = window.ROBBIEBOT_RESULTS_URL || '';
   var player = { name: '' };
-  var state = { resigned: false, reported: false, takebacks: 0, bot: 'blitz', human: 'b', colorPref: 'b', strength: 0.5, orientation: 'b', selected: null, lastInfo: null, pending: null, busy: false, timer: null };
+  var state = { resigned: false, reported: false, takebacks: 0, bot: 'blitz', human: 'b', colorPref: 'b', orientation: 'b', selected: null, lastInfo: null, pending: null, busy: false, timer: null };
 
   function store(k, v) { try { localStorage.setItem(k, v); } catch (e) {} }
   function load(k) { try { return localStorage.getItem(k); } catch (e) { return null; } }
   var savedBot = load('rb-bot'); if (savedBot && BOTS.some(function (b) { return b.key === savedBot; })) state.bot = savedBot;
   var savedColor = load('rb-color'); if (savedColor) state.colorPref = savedColor;
   if (load('rb-clock') === 'off') clock.on = false;
-  var savedStrength = load('rb-strength'); if (savedStrength !== null) state.strength = parseFloat(savedStrength);
+  /* How far the bot looks ahead. Depth is in half-moves; margin is how many
+   * centipawns worse than the best move a move may be and still be played. */
+  var LEVELS = {
+    rushed: { strength: 0.5 },
+    focused: { depth: 2, margin: 150, penalty: 1, timeMs: 1000 },
+    sharp: { depth: 3, margin: 100, penalty: 1, timeMs: 2000 },
+    max: { depth: 4, margin: 50, penalty: 2, timeMs: 4000 }
+  };
+  state.level = 'sharp';
+  var savedLevel = load('rb-level'); if (savedLevel && LEVELS[savedLevel]) state.level = savedLevel;
 
   var $ = function (id) { return document.getElementById(id); };
   player.name = load('rb-name') || '';
@@ -443,12 +453,12 @@ dl.stats dd { margin: 0; font-variant-numeric: tabular-nums; min-width: 0; overf
     }).catch(function () {});
   }
   /* How long the bot "thinks", scaled to its time control and clock. */
-  function thinkTime(source) {
-    var base = { bullet: 700, blitz: 2000, rapid: 6000 }[state.bot];
-    if (!clock.on) return { bullet: 250, blitz: 450, rapid: 700 }[state.bot];
+  function thinkTime() {
+    if (!clock.on) return 400;
+    var base = botInfo(state.bot).seconds * 1000 / 90;  // ~0.7s bullet, 2s blitz, 6.7s rapid
     var left = remaining(chess.turn());
     var t = base * (0.4 + Math.random() * 1.2);
-    if (source === 'book' || history.length < 6) t *= 0.4;
+    if (history.length < 6) t *= 0.4;
     return Math.max(150, Math.min(t, left / 25));
   }
 
@@ -608,19 +618,28 @@ dl.stats dd { margin: 0; font-variant-numeric: tabular-nums; min-width: 0; overf
     if (!p) { fetchProfile(state.bot).then(scheduleBot); return; }
     state.busy = true;
     $('thinking').hidden = false;
-    var bot = new ChessStyleBot.StyleBot(p, { strength: state.strength });
-    var res = bot.choose(chess, history);
+    var budget = thinkTime(), started = Date.now(), lvl = LEVELS[state.level];
     clearTimeout(state.timer);
+    // Let "thinking…" paint before the search briefly occupies the page.
     state.timer = setTimeout(function () {
-      state.busy = false;
-      $('thinking').hidden = true;
-      if (!res || isOver()) { renderAll(); return; }
-      var m = chess.move(res.move);
-      pressClock(m.color);
-      history.push(m); sources.push(res.source);
-      state.lastInfo = { san: m.san, source: res.source, count: res.count, total: res.total, bot: state.bot };
-      renderAll();
-    }, thinkTime(res && res.source));
+      var opts = { strength: lvl.strength };
+      if (lvl.depth) {
+        var ms = clock.on ? Math.min(lvl.timeMs, Math.max(150, budget * 0.8)) : lvl.timeMs;
+        opts.level = { depth: lvl.depth, margin: lvl.margin, penalty: lvl.penalty, timeMs: ms };
+      }
+      var res = new ChessStyleBot.StyleBot(p, opts).choose(chess, history);
+      var wait = (res && res.source === 'book' ? budget * 0.4 : budget) - (Date.now() - started);
+      state.timer = setTimeout(function () {
+        state.busy = false;
+        $('thinking').hidden = true;
+        if (!res || isOver()) { renderAll(); return; }
+        var m = chess.move(res.move);
+        pressClock(m.color);
+        history.push(m); sources.push(res.source);
+        state.lastInfo = { san: m.san, source: res.source, count: res.count, total: res.total, bot: state.bot };
+        renderAll();
+      }, Math.max(0, wait));
+    }, 30);
   }
 
   function renderMoves() {
@@ -738,8 +757,8 @@ dl.stats dd { margin: 0; font-variant-numeric: tabular-nums; min-width: 0; overf
   $('colorSel').addEventListener('change', function (e) { state.colorPref = e.target.value; store('rb-color', state.colorPref); newGame(); });
   $('clockSel').value = clock.on ? 'on' : 'off';
   $('clockSel').addEventListener('change', function (e) { clock.on = e.target.value === 'on'; store('rb-clock', e.target.value); newGame(); });
-  $('strengthSel').value = String(state.strength);
-  $('strengthSel').addEventListener('change', function (e) { state.strength = parseFloat(e.target.value); store('rb-strength', e.target.value); });
+  $('strengthSel').value = state.level;
+  $('strengthSel').addEventListener('change', function (e) { state.level = e.target.value; store('rb-level', e.target.value); });
 
   if (typeof Chess === 'undefined') {
     $('status').textContent = 'Couldn’t load the chess rules library. Check your connection and reload.';

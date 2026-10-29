@@ -406,6 +406,134 @@
   }
   function search(chess, depth, alpha, beta) { return searchPos(posFromChess(chess), depth, alpha, beta); }
 
+  /* ---- deeper search used by the "Like Robbie" and "Tougher" levels ----
+   * Material plus piece-square tables, alpha-beta with quiescence, and a
+   * time limit. The bot then picks, among the moves that search says are
+   * not much worse than the best, the one Robbie's style model likes most. */
+  var VAL2 = { p: 100, n: 320, b: 330, r: 500, q: 900, k: 0 };
+  // Tables are written from White's side, rank 8 first (Simplified Evaluation Function).
+  var PST = {
+    p: [0,0,0,0,0,0,0,0, 50,50,50,50,50,50,50,50, 10,10,20,30,30,20,10,10, 5,5,10,25,25,10,5,5,
+        0,0,0,20,20,0,0,0, 5,-5,-10,0,0,-10,-5,5, 5,10,10,-20,-20,10,10,5, 0,0,0,0,0,0,0,0],
+    n: [-50,-40,-30,-30,-30,-30,-40,-50, -40,-20,0,0,0,0,-20,-40, -30,0,10,15,15,10,0,-30, -30,5,15,20,20,15,5,-30,
+        -30,0,15,20,20,15,0,-30, -30,5,10,15,15,10,5,-30, -40,-20,0,5,5,0,-20,-40, -50,-40,-30,-30,-30,-30,-40,-50],
+    b: [-20,-10,-10,-10,-10,-10,-10,-20, -10,0,0,0,0,0,0,-10, -10,0,5,10,10,5,0,-10, -10,5,5,10,10,5,5,-10,
+        -10,0,10,10,10,10,0,-10, -10,10,10,10,10,10,10,-10, -10,5,0,0,0,0,5,-10, -20,-10,-10,-10,-10,-10,-10,-20],
+    r: [0,0,0,0,0,0,0,0, 5,10,10,10,10,10,10,5, -5,0,0,0,0,0,0,-5, -5,0,0,0,0,0,0,-5,
+        -5,0,0,0,0,0,0,-5, -5,0,0,0,0,0,0,-5, -5,0,0,0,0,0,0,-5, 0,0,0,5,5,0,0,0],
+    q: [-20,-10,-10,-5,-5,-10,-10,-20, -10,0,0,0,0,0,0,-10, -10,0,5,5,5,5,0,-10, -5,0,5,5,5,5,0,-5,
+        0,0,5,5,5,5,0,-5, -10,5,5,5,5,5,0,-10, -10,0,5,0,0,0,0,-10, -20,-10,-10,-5,-5,-10,-10,-20],
+    k: [-30,-40,-40,-50,-50,-40,-40,-30, -30,-40,-40,-50,-50,-40,-40,-30, -30,-40,-40,-50,-50,-40,-40,-30, -30,-40,-40,-50,-50,-40,-40,-30,
+        -20,-30,-30,-40,-40,-30,-30,-20, -10,-20,-20,-20,-20,-20,-20,-10, 20,20,0,0,0,0,20,20, 20,30,10,0,0,10,30,20],
+    ke: [-50,-40,-30,-20,-20,-30,-40,-50, -30,-20,-10,0,0,-10,-20,-30, -30,-10,20,30,30,20,-10,-30, -30,-10,30,40,40,30,-10,-30,
+         -30,-10,30,40,40,30,-10,-30, -30,-10,20,30,30,20,-10,-30, -30,-30,0,0,0,0,-30,-30, -50,-30,-30,-30,-30,-30,-30,-50]
+  };
+  function pstIndex(s, color) { return color === 'w' ? (7 - rank(s)) * 8 + file(s) : rank(s) * 8 + file(s); }
+
+  function evalPos2(pos) {
+    var b = pos.b, score = 0, nonPawn = 0, i, p;
+    for (i = 0; i < 64; i++) { p = b[i]; if (p && p.type !== 'p' && p.type !== 'k') nonPawn += VAL2[p.type]; }
+    var kingTable = nonPawn <= 1300 ? 'ke' : 'k';
+    for (i = 0; i < 64; i++) {
+      p = b[i];
+      if (!p) continue;
+      var v = VAL2[p.type] + PST[p.type === 'k' ? kingTable : p.type][pstIndex(i, p.color)];
+      score += p.color === pos.turn ? v : -v;
+    }
+    return score;
+  }
+
+  function Abort() {}
+
+  function orderMoves(moves) {
+    return moves.map(function (m) {
+      var key = 0;
+      if (m.captured) key -= 10 * VAL2[m.captured] - VAL2[m.piece] / 10 + 1000;
+      if (m.promotion) key -= VAL2[m.promotion];
+      return [key, m];
+    }).sort(function (x, y) { return x[0] - y[0]; }).map(function (x) { return x[1]; });
+  }
+
+  function Searcher(deadline) { this.deadline = deadline; this.nodes = 0; }
+  Searcher.prototype.tick = function () {
+    if ((++this.nodes & 1023) === 0 && Date.now() > this.deadline) throw new Abort();
+  };
+  Searcher.prototype.negamax = function (pos, depth, alpha, beta, ply) {
+    this.tick();
+    var moves = legalMoves(pos, false);
+    if (!moves.length) return inCheck(pos) ? -(MATE - ply) : 0;
+    if (insufficient(pos)) return 0;
+    if (depth <= 0) return this.quiesce(pos, alpha, beta, ply, 6);
+    var list = orderMoves(moves), best = -Infinity;
+    for (var i = 0; i < list.length; i++) {
+      var u = makeMove(pos, list[i]);
+      var score = -this.negamax(pos, depth - 1, -beta, -alpha, ply + 1);
+      unmakeMove(pos, u);
+      if (score > best) best = score;
+      if (score > alpha) alpha = score;
+      if (alpha >= beta) break;
+    }
+    return best;
+  };
+  Searcher.prototype.quiesce = function (pos, alpha, beta, ply, qdepth) {
+    this.tick();
+    var stand = evalPos2(pos);
+    if (stand >= beta || qdepth === 0) return stand;
+    if (stand > alpha) alpha = stand;
+    var list = orderMoves(legalMoves(pos, true));
+    for (var i = 0; i < list.length; i++) {
+      var u = makeMove(pos, list[i]);
+      var score = -this.quiesce(pos, -beta, -alpha, ply + 1, qdepth - 1);
+      unmakeMove(pos, u);
+      if (score >= beta) return score;
+      if (score > alpha) alpha = score;
+    }
+    return alpha;
+  };
+
+  /* Values (centipawns, from the mover's side) of every root move, exact for
+   * moves within `margin` of the best and an upper bound for the rest.
+   * Searches deeper while time allows; returns the last finished depth. */
+  function rootValues(chess, order, maxDepth, margin, timeMs) {
+    var pos = posFromChess(chess);
+    var internal = legalMoves(pos, false);
+    function find(m) {
+      for (var i = 0; i < internal.length; i++) {
+        var x = internal[i];
+        if (squareName(x.from) === m.from && squareName(x.to) === m.to && (x.promotion || '') === (m.promotion || '')) return x;
+      }
+      return null;
+    }
+    var pairs = order.map(function (m) { return [m, find(m)]; });
+    var searcher = new Searcher(Date.now() + timeMs);
+    var done = null, depthDone = 0;
+    for (var d = 1; d <= maxDepth; d++) {
+      var vals = new Array(pairs.length), best = -Infinity;
+      try {
+        for (var i = 0; i < pairs.length; i++) {
+          var u = makeMove(pos, pairs[i][1]);
+          var floor = best === -Infinity ? -Infinity : best - margin - 1;
+          var v;
+          try { v = -searcher.negamax(pos, d - 1, -Infinity, -floor, 1); }
+          finally { unmakeMove(pos, u); }
+          vals[i] = v;
+          if (v > best) best = v;
+        }
+      } catch (e) {
+        if (e instanceof Abort) break;
+        throw e;
+      }
+      done = vals; depthDone = d;
+      // Search the most promising moves first next time (keeps style order among ties).
+      var idx = pairs.map(function (_, k) { return k; }).sort(function (a, b) { return vals[b] - vals[a] || a - b; });
+      pairs = idx.map(function (k) { return pairs[k]; });
+      done = idx.map(function (k) { return vals[k]; });
+    }
+    return { moves: pairs.map(function (p) { return p[0]; }), values: done, depth: depthDone, nodes: searcher.nodes };
+  }
+
+  function squareName(s) { return 'abcdefgh'[file(s)] + (rank(s) + 1); }
+
   /* FEN key matching python-chess: en passant square only if a capture is legal. */
   function positionKey(chess, moves) {
     var parts = chess.fen().split(' ');
@@ -427,7 +555,33 @@
     this.temperature = opts.temperature === undefined ? 1 : opts.temperature;
     this.strength = opts.strength === undefined ? 0.5 : opts.strength;
     this.random = opts.random || Math.random;
+    // A search level ({depth, margin, penalty, timeMs}) replaces the old shallow check.
+    this.level = opts.level || null;
   }
+
+  /* Style scores only (no search): how much Robbie's model likes each move. */
+  StyleBot.prototype.styleScores = function (chess, moves, history) {
+    var b = board64(chess), phase = gamePhase(chess, b), w = this.weights;
+    return moves.map(function (m) {
+      var f = moveFeatures(chess, b, m, phase, history), s = 0;
+      for (var k in f) s += w[k] * f[k];
+      return s;
+    });
+  };
+
+  /* Search every move (best first, by Robbie's taste), then return the
+   * moves within `margin` centipawns of the best with their values. */
+  StyleBot.prototype.searchMoves = function (chess, moves, style) {
+    var lvl = this.level;
+    var order = moves.map(function (m, i) { return [style[i], i]; })
+      .sort(function (a, b) { return b[0] - a[0]; }).map(function (x) { return moves[x[1]]; });
+    var res = rootValues(chess, order, lvl.depth, lvl.margin, lvl.timeMs);
+    if (!res.values) return null;
+    var best = Math.max.apply(null, res.values), ok = [];
+    res.moves.forEach(function (m, i) { if (res.values[i] >= best - lvl.margin) ok.push({ move: m, value: res.values[i] }); });
+    this.lastSearch = { depth: res.depth, nodes: res.nodes, candidates: ok.length, best: best };
+    return { best: best, ok: ok };
+  };
 
   StyleBot.prototype.scores = function (chess, moves, history) {
     var b = board64(chess), phase = gamePhase(chess, b), w = this.weights, self = this;
@@ -458,23 +612,40 @@
   StyleBot.prototype.choose = function (chess, history) {
     var moves = chess.moves({ verbose: true });
     if (!moves.length) return null;
+    var self = this, lvl = this.level;
+    var style = lvl ? this.styleScores(chess, moves, history) : null;
+    var found = lvl ? this.searchMoves(chess, moves, style) : null;
+    var safe = null;
+    if (found) {
+      safe = {};
+      found.ok.forEach(function (c) { safe[uci(c.move)] = c.value; });
+    }
     var entry = this.book[positionKey(chess, moves)];
     if (entry) {
       var counts = {}, total = 0;
       entry.split(' ').forEach(function (pair) {
         var p = pair.split(':'); counts[p[0]] = parseInt(p[1], 10);
       });
-      var opts = moves.filter(function (m) { return counts[uci(m)]; });
+      // With search on, skip remembered moves that search says lose material.
+      var opts = moves.filter(function (m) { return counts[uci(m)] && (!safe || uci(m) in safe); });
       if (opts.length) {
         opts.forEach(function (m) { total += counts[uci(m)]; });
         var pick = this.sample(opts, opts.map(function (m) { return Math.log(counts[uci(m)]); }));
         return { move: pick, source: 'book', count: counts[uci(pick)], total: total };
       }
     }
+    if (found) {
+      // Style decides among safe moves; each pawn given up costs `penalty` logits.
+      var cands = found.ok.map(function (c) { return c.move; });
+      var scores = found.ok.map(function (c) {
+        return style[moves.indexOf(c.move)] + lvl.penalty * (c.value - found.best) / 100;
+      });
+      return { move: self.sample(cands, scores), source: 'model' };
+    }
     return { move: this.sample(moves, this.scores(chess, moves, history)), source: 'model' };
   };
 
-  var api = { StyleBot: StyleBot, moveFeatures: moveFeatures, board64: board64, gamePhase: gamePhase,
+  var api = { rootValues: rootValues, evalPos2: evalPos2, StyleBot: StyleBot, moveFeatures: moveFeatures, board64: board64, gamePhase: gamePhase,
               positionKey: positionKey, search: search, uci: uci, MATE: MATE };
   if (typeof module !== 'undefined' && module.exports) module.exports = api;
   else root.ChessStyleBot = api;
