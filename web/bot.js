@@ -562,6 +562,9 @@
     this.net = opts.net || null;
     this.netInputs = opts.netInputs || null;
     this.netTemperature = opts.netTemperature === undefined ? 1 : opts.netTemperature;
+    // Remembered moves are picked with weight count^bookSharpness, so the main
+    // line is near-automatic (100 vs 8 games -> 99.9%) and only real splits vary.
+    this.bookSharpness = opts.bookSharpness === undefined ? 3 : opts.bookSharpness;
   }
 
   /* Style scores only (no search): how much Robbie's model likes each move. */
@@ -640,7 +643,8 @@
       var opts = moves.filter(function (m) { return counts[uci(m)] && (!safe || uci(m) in safe); });
       if (opts.length) {
         opts.forEach(function (m) { total += counts[uci(m)]; });
-        var pick = this.sample(opts, opts.map(function (m) { return Math.log(counts[uci(m)]); }));
+        var sharp = this.bookSharpness;
+        var pick = this.sample(opts, opts.map(function (m) { return sharp * Math.log(counts[uci(m)]); }));
         return { move: pick, source: 'book', count: counts[uci(pick)], total: total };
       }
     }

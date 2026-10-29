@@ -54,7 +54,8 @@ class StyleBot:
         if not options:
             return None
         moves, counts = zip(*options)
-        return self._sample(list(moves), [math.log(c) for c in counts])
+        # count**3 weighting: the main line is near-automatic, real splits still vary.
+        return self._sample(list(moves), [3 * math.log(c) for c in counts])
 
     def move_scores(self, board, legal):
         w = self.weights
