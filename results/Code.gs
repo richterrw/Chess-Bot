@@ -8,8 +8,27 @@ var HEADERS = ['Date', 'Player', 'Bot', 'Player color', 'Result', 'How', 'Moves'
                'Takebacks', 'Bot strength', 'Clock', 'PGN'];
 var RESULTS = { win: 'Won', loss: 'Lost', draw: 'Draw' };
 
-function sheet_() {
+// Works both inside a sheet (Extensions > Apps Script) and as a standalone
+// script from script.new, where it creates a "RobbieBot games" sheet in Drive.
+function spreadsheet_() {
   var ss = SpreadsheetApp.getActiveSpreadsheet();
+  if (ss) return ss;
+  var props = PropertiesService.getScriptProperties();
+  var id = props.getProperty('SHEET_ID');
+  if (id) return SpreadsheetApp.openById(id);
+  ss = SpreadsheetApp.create('RobbieBot games');
+  props.setProperty('SHEET_ID', ss.getId());
+  return ss;
+}
+
+// Run this once from the editor to create the sheet and print its link.
+function setup() {
+  sheet_();
+  Logger.log('Your results sheet: ' + spreadsheet_().getUrl());
+}
+
+function sheet_() {
+  var ss = spreadsheet_();
   var sh = ss.getSheetByName(SHEET_NAME);
   if (!sh) {
     sh = ss.insertSheet(SHEET_NAME);
