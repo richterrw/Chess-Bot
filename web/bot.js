@@ -557,10 +557,20 @@
     this.random = opts.random || Math.random;
     // A search level ({depth, margin, penalty, timeMs}) replaces the old shallow check.
     this.level = opts.level || null;
+    // Optional neural move predictor (web/movenet.js) with {tc, rating} for its inputs.
+    // When present it replaces the hand-made style features.
+    this.net = opts.net || null;
+    this.netInputs = opts.netInputs || null;
+    this.netTemperature = opts.netTemperature === undefined ? 1 : opts.netTemperature;
   }
 
   /* Style scores only (no search): how much Robbie's model likes each move. */
   StyleBot.prototype.styleScores = function (chess, moves, history) {
+    if (this.net) {
+      var probs = this.net.moveProbs(chess, moves, history,
+        { tc: this.netInputs.tc, rating: this.netInputs.rating, robbie: true });
+      return probs.map(function (p) { return Math.log(Math.max(p, 1e-9)); });
+    }
     var b = board64(chess), phase = gamePhase(chess, b), w = this.weights;
     return moves.map(function (m) {
       var f = moveFeatures(chess, b, m, phase, history), s = 0;
@@ -613,7 +623,7 @@
     var moves = chess.moves({ verbose: true });
     if (!moves.length) return null;
     var self = this, lvl = this.level;
-    var style = lvl ? this.styleScores(chess, moves, history) : null;
+    var style = lvl || this.net ? this.styleScores(chess, moves, history) : null;
     var found = lvl ? this.searchMoves(chess, moves, style) : null;
     var safe = null;
     if (found) {
@@ -640,7 +650,14 @@
       var scores = found.ok.map(function (c) {
         return style[moves.indexOf(c.move)] + lvl.penalty * (c.value - found.best) / 100;
       });
-      return { move: self.sample(cands, scores), source: 'model' };
+      var chosen = self.sample(cands, scores);
+      return { move: chosen, source: 'model', prob: this.net ? Math.exp(style[moves.indexOf(chosen)]) : undefined };
+    }
+    if (this.net) {
+      var t = this.netTemperature;
+      var pickNet = t <= 0 ? moves[style.indexOf(Math.max.apply(null, style))]
+        : this.sample(moves, style.map(function (v) { return v / t; }));
+      return { move: pickNet, source: 'model', prob: Math.exp(style[moves.indexOf(pickNet)]) };
     }
     return { move: this.sample(moves, this.scores(chess, moves, history)), source: 'model' };
   };

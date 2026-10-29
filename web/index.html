@@ -233,8 +233,8 @@ dl.stats dd { margin: 0; font-variant-numeric: tabular-nums; min-width: 0; overf
           <div class="field">
             <label for="strengthSel">Bot strength</label>
             <select id="strengthSel">
-              <option value="rushed">Rushed (blunders like blitz Robbie)</option>
-              <option value="focused">Focused</option>
+              <option value="robbie">Like Robbie</option>
+              <option value="rushed">Rushed (more blunders)</option>
               <option value="sharp">Sharp</option>
               <option value="max">Max</option>
             </select>
@@ -264,6 +264,7 @@ dl.stats dd { margin: 0; font-variant-numeric: tabular-nums; min-width: 0; overf
 
 <script src="https://cdn.jsdelivr.net/npm/chess.js@0.10.3/chess.js"></script>
 <script src="bot.js"></script>
+<script src="movenet.js"></script>
 <script src="config.js"></script>
 <script>
 (function () {
@@ -292,12 +293,23 @@ dl.stats dd { margin: 0; font-variant-numeric: tabular-nums; min-width: 0; overf
   /* How far the bot looks ahead. Depth is in half-moves; margin is how many
    * centipawns worse than the best move a move may be and still be played. */
   var LEVELS = {
-    rushed: { strength: 0.5 },
-    focused: { depth: 2, margin: 150, penalty: 1, timeMs: 1000 },
+    rushed: { depth: 1, margin: 200, penalty: 1, timeMs: 600 },
+    robbie: { depth: 2, margin: 150, penalty: 1, timeMs: 1000 },
     sharp: { depth: 3, margin: 100, penalty: 1, timeMs: 2000 },
     max: { depth: 4, margin: 50, penalty: 2, timeMs: 4000 }
   };
-  state.level = 'sharp';
+  state.level = 'robbie';
+  /* The neural net's time-control and rating inputs for each bot. */
+  var NET_INPUTS = {
+    bullet: { tc: 0, rating: 1000 }, blitz: { tc: 1, rating: 1300 },
+    rapid: { tc: 2, rating: 1400 }, peak: { tc: 1, rating: 1376 }
+  };
+  var moveNet = null;
+  var netReady = Promise.all([
+    fetch('data/movenet.json').then(function (r) { if (!r.ok) throw new Error('HTTP ' + r.status); return r.json(); }),
+    fetch('data/movenet.bin').then(function (r) { if (!r.ok) throw new Error('HTTP ' + r.status); return r.arrayBuffer(); })
+  ]).then(function (x) { moveNet = new ChessMoveNet.MoveNet(x[1], x[0]); })
+    .catch(function () { moveNet = null; });  // fall back to the hand-made style model
   var savedLevel = load('rb-level'); if (savedLevel && LEVELS[savedLevel]) state.level = savedLevel;
 
   var $ = function (id) { return document.getElementById(id); };
@@ -616,13 +628,14 @@ dl.stats dd { margin: 0; font-variant-numeric: tabular-nums; min-width: 0; overf
     if (isOver() || chess.turn() === state.human || needsName()) return;
     var p = profiles[state.bot];
     if (!p) { fetchProfile(state.bot).then(scheduleBot); return; }
+    if (!state.netSettled) { netReady.then(function () { state.netSettled = true; scheduleBot(); }); return; }
     state.busy = true;
     $('thinking').hidden = false;
     var budget = thinkTime(), started = Date.now(), lvl = LEVELS[state.level];
     clearTimeout(state.timer);
     // Let "thinking…" paint before the search briefly occupies the page.
     state.timer = setTimeout(function () {
-      var opts = { strength: lvl.strength };
+      var opts = { strength: lvl.strength, net: moveNet, netInputs: NET_INPUTS[state.bot] };
       if (lvl.depth) {
         var ms = clock.on ? Math.min(lvl.timeMs, Math.max(150, budget * 0.8)) : lvl.timeMs;
         opts.level = { depth: lvl.depth, margin: lvl.margin, penalty: lvl.penalty, timeMs: ms };
@@ -636,7 +649,7 @@ dl.stats dd { margin: 0; font-variant-numeric: tabular-nums; min-width: 0; overf
         var m = chess.move(res.move);
         pressClock(m.color);
         history.push(m); sources.push(res.source);
-        state.lastInfo = { san: m.san, source: res.source, count: res.count, total: res.total, bot: state.bot };
+        state.lastInfo = { san: m.san, source: res.source, count: res.count, total: res.total, prob: res.prob, bot: state.bot };
         renderAll();
       }, Math.max(0, wait));
     }, 30);
@@ -676,7 +689,8 @@ dl.stats dd { margin: 0; font-variant-numeric: tabular-nums; min-width: 0; overf
       why.innerHTML = '<b>' + escapeHtml(info.san) + '</b> came from Robbie’s games: Robbie played it here ' +
         info.count.toLocaleString() + ' of ' + info.total.toLocaleString() + ' times.';
     } else if (info) {
-      why.innerHTML = '<b>' + escapeHtml(info.san) + '</b> is a guess. Robbie never reached this position, so the bot picked the move that best fits Robbie\u2019s style.';
+      why.innerHTML = '<b>' + escapeHtml(info.san) + '</b> is a prediction. Robbie never reached this position' +
+        (info.prob !== undefined ? ', so the bot\u2019s neural net guessed what Robbie would play here (' + Math.round(info.prob * 100) + '% likely).' : ', so the bot picked the move that best fits Robbie\u2019s style.');
     } else if (!history.length) {
       why.textContent = 'Tap a piece, then tap where it should go.';
     } else {
