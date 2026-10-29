@@ -4,8 +4,12 @@
   'use strict';
   var PIECES = { p: 0, n: 1, b: 2, r: 3, q: 4, k: 5 };
 
-  function MoveNet(buffer, meta) {
-    var f = new Float32Array(buffer), off = 0, ch = meta.channels;
+  /* meta: the JSON written by chessbot/nn_export.py (weights in base64). */
+  function MoveNet(meta) {
+    var bytes = typeof atob === 'function'
+      ? Uint8Array.from(atob(meta.weights), function (c) { return c.charCodeAt(0); })
+      : new Uint8Array(Buffer.from(meta.weights, 'base64'));
+    var f = new Float32Array(bytes.buffer), off = 0, ch = meta.channels;
     function take(n) { var a = f.subarray(off, off + n); off += n; return a; }
     function conv(cin, cout, k) { return { cin: cin, cout: cout, k: k, w: take(cout * cin * k * k), b: take(cout) }; }
     this.stem = conv(meta.inputs, ch, 3);

@@ -1,9 +1,11 @@
 """Export a trained MoveNet for the browser (web/movenet.js reads it).
 
-Batch norm is folded into the convolutions, and weights are written as one
-little-endian float32 file in this order: stem, each block's two convs,
-head. Each conv is weights [out][in][k][k] followed by bias [out].
+Batch norm is folded into the convolutions. The output is one JSON file with
+the shape and the weights as base64 little-endian float32, in this order:
+stem, each block's two convs, head. Each conv is weights [out][in][k][k]
+followed by bias [out].
 """
+import base64
 import argparse
 import json
 
@@ -25,7 +27,7 @@ def fold(conv, bn):
 def main():
     ap = argparse.ArgumentParser(description=__doc__)
     ap.add_argument("--model", default="data/movenet.pt")
-    ap.add_argument("--out", default="web/data/movenet.bin")
+    ap.add_argument("--out", default="web/data/movenet.json")
     ap.add_argument("--channels", type=int, default=64)
     ap.add_argument("--blocks", type=int, default=6)
     args = ap.parse_args()
@@ -40,10 +42,9 @@ def main():
     for w, b in layers:
         parts += [w.astype("<f4").ravel(), b.astype("<f4").ravel()]
     blob = np.concatenate(parts)
-    blob.tofile(args.out)
     meta = {"channels": args.channels, "blocks": args.blocks, "inputs": int(net.stem.in_channels),
-            "floats": int(blob.size)}
-    with open(args.out.replace(".bin", ".json"), "w") as fh:
+            "floats": int(blob.size), "weights": base64.b64encode(blob.tobytes()).decode("ascii")}
+    with open(args.out, "w") as fh:
         json.dump(meta, fh)
     print(f"wrote {args.out}: {blob.size} floats ({blob.size * 4 / 1e6:.1f} MB), {meta}")
 

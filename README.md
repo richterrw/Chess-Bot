@@ -90,7 +90,7 @@ hand-made feature model. It runs in plain JavaScript (`web/movenet.js`).
 ```bash
 python -m chessbot.nn_data      # games -> data/nn_data.npz
 python -m chessbot.nn_train     # ~50 min on 4 CPU cores -> data/movenet.pt
-python -m chessbot.nn_export    # -> web/data/movenet.bin + .json
+python -m chessbot.nn_export    # -> web/data/movenet.json
 ```
 
 A short tactics search then removes moves that lose material. Measured on

@@ -305,10 +305,9 @@ dl.stats dd { margin: 0; font-variant-numeric: tabular-nums; min-width: 0; overf
     rapid: { tc: 2, rating: 1400 }, peak: { tc: 1, rating: 1376 }
   };
   var moveNet = null;
-  var netReady = Promise.all([
-    fetch('data/movenet.json').then(function (r) { if (!r.ok) throw new Error('HTTP ' + r.status); return r.json(); }),
-    fetch('data/movenet.bin').then(function (r) { if (!r.ok) throw new Error('HTTP ' + r.status); return r.arrayBuffer(); })
-  ]).then(function (x) { moveNet = new ChessMoveNet.MoveNet(x[1], x[0]); })
+  var netReady = fetch('data/movenet.json')
+    .then(function (r) { if (!r.ok) throw new Error('HTTP ' + r.status); return r.json(); })
+    .then(function (meta) { moveNet = new ChessMoveNet.MoveNet(meta); })
     .catch(function () { moveNet = null; });  // fall back to the hand-made style model
   var savedLevel = load('rb-level'); if (savedLevel && LEVELS[savedLevel]) state.level = savedLevel;
 
